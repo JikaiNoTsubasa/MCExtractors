@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(tree:*)",
+      "Bash(ls:*)",
+      "Bash(./gradlew-java17.bat build)",
+      "Bash(./gradlew.bat build)"
+    ]
+  }
+}
