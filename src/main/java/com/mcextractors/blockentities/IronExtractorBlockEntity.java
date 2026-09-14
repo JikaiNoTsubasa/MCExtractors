@@ -2,6 +2,7 @@ package com.mcextractors.blockentities;
 
 import com.mcextractors.blocks.IronExtractorBlock;
 import com.mcextractors.init.ModBlockEntities;
+import com.mcextractors.init.ModItems;
 import com.mcextractors.menu.IronExtractorMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -30,12 +31,15 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Iron Extractor Block Entity
- * Processes cobblestone/cobbled deepslate with redstone fuel to extract iron nuggets (90% chance)
+ * Processes various stones with redstone fuel to extract nuggets:
+ * - Cobblestone/Cobbled Deepslate → Iron Nugget (90% chance)
+ * - Andesite → Andesite Nugget (100% chance)
+ * - Diorite → Andesite Nugget (90% chance)
  *
  * Hopper Configuration:
- * - Sides (North/South/East/West): Insert cobblestone/cobbled deepslate AND redstone
+ * - Sides (North/South/East/West): Insert stones AND redstone
  * - Top: No hopper interaction
- * - Bottom: Extract iron nuggets (output)
+ * - Bottom: Extract nuggets (output)
  */
 public class IronExtractorBlockEntity extends BlockEntity implements MenuProvider {
     // Slots: 0=input(cobble), 1=fuel(redstone), 2-6=output(iron nuggets)
@@ -48,7 +52,7 @@ public class IronExtractorBlockEntity extends BlockEntity implements MenuProvide
     // Processing constants
     private static final int PROCESS_TIME = 200; // 10 seconds (200 ticks)
     private static final int FUEL_VALUE = 1600; // redstone dust gives 1600 ticks (80 seconds, like coal)
-    private static final float IRON_CHANCE = 0.9F; // 90% chance
+    private static final float IRON_CHANCE = 0.9F; // 90% chance for diorite
 
     private final ItemStackHandler itemHandler = new ItemStackHandler(TOTAL_SLOTS) {
         @Override
@@ -59,7 +63,8 @@ public class IronExtractorBlockEntity extends BlockEntity implements MenuProvide
         @Override
         public boolean isItemValid(int slot, @NotNull ItemStack stack) {
             if (slot == INPUT_SLOT) {
-                return stack.is(Items.COBBLESTONE) || stack.is(Items.COBBLED_DEEPSLATE);
+                return stack.is(Items.COBBLESTONE) || stack.is(Items.COBBLED_DEEPSLATE)
+                        || stack.is(Items.DIORITE);
             } else if (slot == FUEL_SLOT) {
                 return stack.is(Items.REDSTONE);
             } else {
@@ -227,21 +232,37 @@ public class IronExtractorBlockEntity extends BlockEntity implements MenuProvide
 
     private boolean canProcess() {
         ItemStack input = itemHandler.getStackInSlot(INPUT_SLOT);
-        if (input.isEmpty() || (!input.is(Items.COBBLESTONE) && !input.is(Items.COBBLED_DEEPSLATE))) {
+        if (input.isEmpty()) {
+            return false;
+        }
+
+        // Check if input is valid
+        boolean validInput = input.is(Items.COBBLESTONE) || input.is(Items.COBBLED_DEEPSLATE)
+                || input.is(Items.DIORITE);
+        if (!validInput) {
             return false;
         }
 
         // Check if there's space in output slots
-        return hasSpaceInOutput();
+        return hasSpaceInOutput(input);
     }
 
-    private boolean hasSpaceInOutput() {
+    private boolean hasSpaceInOutput(ItemStack input) {
+        // Determine what output item we need space for
+        boolean needsIronNugget = input.is(Items.COBBLESTONE) || input.is(Items.COBBLED_DEEPSLATE);
+        boolean needsAndesiteNugget = input.is(Items.DIORITE);
+
         for (int i = OUTPUT_SLOT_START; i < OUTPUT_SLOT_START + OUTPUT_SLOT_COUNT; i++) {
             ItemStack outputStack = itemHandler.getStackInSlot(i);
             if (outputStack.isEmpty()) {
                 return true;
             }
-            if (outputStack.is(Items.IRON_NUGGET) && outputStack.getCount() < outputStack.getMaxStackSize()) {
+            if (needsIronNugget && outputStack.is(Items.IRON_NUGGET)
+                    && outputStack.getCount() < outputStack.getMaxStackSize()) {
+                return true;
+            }
+            if (needsAndesiteNugget && outputStack.getItem() == ModItems.ANDESITE_NUGGET.get()
+                    && outputStack.getCount() < outputStack.getMaxStackSize()) {
                 return true;
             }
         }
@@ -262,19 +283,33 @@ public class IronExtractorBlockEntity extends BlockEntity implements MenuProvide
         ItemStack input = itemHandler.getStackInSlot(INPUT_SLOT);
         if (input.isEmpty()) return;
 
-        // Consume cobblestone
+        // Determine output and success chance based on input type
+        ItemStack output = null;
+        float successChance = 0.0F;
+
+        if (input.is(Items.COBBLESTONE) || input.is(Items.COBBLED_DEEPSLATE)) {
+            // Cobblestone/Cobbled Deepslate → Iron Nugget (90%)
+            output = new ItemStack(Items.IRON_NUGGET, 1);
+            successChance = IRON_CHANCE;
+        } else if (input.is(Items.DIORITE)) {
+            // Diorite → Andesite Nugget (90%)
+            output = new ItemStack(ModItems.ANDESITE_NUGGET.get(), 1);
+            successChance = IRON_CHANCE; // 90% like cobblestone
+        }
+
+        // Consume input
         input.shrink(1);
 
-        // 90% chance to extract iron nugget
-        if (level.random.nextFloat() < IRON_CHANCE) {
-            // Try to add iron nugget to output slots
-            ItemStack ironNugget = new ItemStack(Items.IRON_NUGGET, 1);
+        // Try to extract nugget based on success chance
+        if (output != null && level.random.nextFloat() < successChance) {
+            // Try to add nugget to output slots
             for (int i = OUTPUT_SLOT_START; i < OUTPUT_SLOT_START + OUTPUT_SLOT_COUNT; i++) {
                 ItemStack outputStack = itemHandler.getStackInSlot(i);
                 if (outputStack.isEmpty()) {
-                    itemHandler.setStackInSlot(i, ironNugget);
+                    itemHandler.setStackInSlot(i, output.copy());
                     break;
-                } else if (outputStack.is(Items.IRON_NUGGET) && outputStack.getCount() < outputStack.getMaxStackSize()) {
+                } else if (ItemStack.isSameItemSameTags(outputStack, output)
+                        && outputStack.getCount() < outputStack.getMaxStackSize()) {
                     outputStack.grow(1);
                     break;
                 }

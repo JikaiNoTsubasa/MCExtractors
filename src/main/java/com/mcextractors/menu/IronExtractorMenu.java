@@ -40,11 +40,12 @@ public class IronExtractorMenu extends AbstractContainerMenu {
         addPlayerHotbar(playerInventory);
 
         // Add block entity slots
-        // Input slot (cobblestone) - position 8, 17
+        // Input slot (stones) - position 8, 17
         this.addSlot(new SlotItemHandler(this.blockEntity.getItemHandler(), IronExtractorBlockEntity.INPUT_SLOT, 56, 17) {
             @Override
             public boolean mayPlace(@NotNull ItemStack stack) {
-                return stack.is(Items.COBBLESTONE);
+                return stack.is(Items.COBBLESTONE) || stack.is(Items.COBBLED_DEEPSLATE)
+                        || stack.is(Items.DIORITE);
             }
         });
 
@@ -112,11 +113,14 @@ public class IronExtractorMenu extends AbstractContainerMenu {
                 }
             } else {
                 // From player inventory to container
-                if (originalStack.is(Items.COBBLESTONE)) {
+                if (originalStack.is(Items.COBBLESTONE) || originalStack.is(Items.COBBLED_DEEPSLATE)
+                        || originalStack.is(Items.DIORITE)) {
+                    // Input stones
                     if (!this.moveItemStackTo(originalStack, playerInventoryEnd, playerInventoryEnd + 1, false)) {
                         return ItemStack.EMPTY;
                     }
                 } else if (originalStack.is(Items.REDSTONE)) {
+                    // Fuel
                     if (!this.moveItemStackTo(originalStack, playerInventoryEnd + 1, playerInventoryEnd + 2, false)) {
                         return ItemStack.EMPTY;
                     }
